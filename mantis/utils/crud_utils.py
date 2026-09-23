@@ -6,7 +6,7 @@ from mantis.db.crud_extended_assets import add_extended_assets_query, delete_ext
 from mantis.db.crud_vulnerabilities import add_findings_query, delete_findings_query, findings_bulk_mixed_query
 from mantis.utils.common_utils import CommonUtils
 from mantis.config_parsers.config_client import ConfigProvider
-from mantis.constants import ASSET_TYPE_SUBDOMAIN
+from mantis.constants import ASSET_TYPE_SUBDOMAIN, ASSET_TYPE_TLD, ASSET_TYPE_IP
 from mantis.utils.tool_utils import get_findings_by_asset
 from pymongo import UpdateOne, InsertOne
 from pydantic import ValidationError
@@ -26,6 +26,12 @@ class CrudUtils:
             # TODO Can we parallelize this. Time complexity is O(N).
             if assets:
                 for asset in assets:
+                    # Discovered assets are later interpolated into tool commands, drop anything
+                    # that isn't a well-formed hostname/IP
+                    if asset.get("asset_type") in (ASSET_TYPE_SUBDOMAIN, ASSET_TYPE_TLD, ASSET_TYPE_IP) \
+                            and not CommonUtils.is_valid_host(asset.get("asset")):
+                        logging.warning(f"Skipping invalid asset {asset.get('asset')!r} from {asset.get('tools_source')}")
+                        continue
                     if asset["asset_type"] == ASSET_TYPE_SUBDOMAIN:
                         asset['app'] = CrudUtils.assign_app_context(asset['asset'])
                     validated_asset_dict = Assets(**asset).dict()
@@ -142,38 +148,20 @@ class CrudUtils:
 
         bulk_write_query = []
         ## close reopen insert
-        db_findings = await get_findings_by_asset(asset, finding_type)
-        logging.debug("New finding IDS ", new_finding_ids, len(new_finding_ids))
-        logging.debug("Asset Name: ", asset)
-        logging.debug("findings list: ", findings_list, len(findings_list))
-        logging.debug("DB findings ", db_findings, len(db_findings))
-        # time.sleep(10)
-        try:
-            for db_finding in db_findings:
-                if db_finding["_id"] not in new_finding_ids:
+        # Only reconcile findings produced by this tool, otherwise one tool closes another's findings
+        db_findings = await get_findings_by_asset(asset, finding_type, type(obj).__name__)
+        logging.debug(f"Asset: {asset}, new finding ids: {len(new_finding_ids)}, DB findings: {len(db_findings)}")
+        for db_finding in db_findings:
+            status = "Open" if db_finding["_id"] in new_finding_ids else "Fixed"
+            bulk_write_query.append(UpdateOne({"_id": db_finding["_id"]},
+                                              {"$set":
+                                                   {"updated_timestamp": CommonUtils.get_ikaros_std_timestamp(),
+                                                    "status": status
+                                                    }
+                                               }))
 
-                    bulk_write_query.append(UpdateOne({"_id": db_finding["_id"]},
-                                                      {"$set":
-                                                           {"updated_timestamp": CommonUtils.get_ikaros_std_timestamp(),
-                                                            "status": "Fixed"
-                                                            }
-                                                       }, upsert=True))
-                    logging.debug("Bulk write query ", bulk_write_query)
-                elif db_finding["_id"] in new_finding_ids:
-
-                    bulk_write_query.append(UpdateOne({"_id": db_finding["_id"]},
-                                                      {"$set":
-                                                           {"updated_timestamp": CommonUtils.get_ikaros_std_timestamp(),
-                                                            "status": "Open"
-                                                            }
-                                                       }, upsert=True))
-
-                    logging.debug("Bulk write query ", bulk_write_query)
-        except Exception as e:
-            logging.error(f"Exception occured while inserting findings {e}")
-            exit(1)
-
-        await findings_bulk_mixed_query(bulk_write_query)
+        if bulk_write_query:
+            await findings_bulk_mixed_query(bulk_write_query)
 
         await add_findings_query(findings_data=findings_list)
 

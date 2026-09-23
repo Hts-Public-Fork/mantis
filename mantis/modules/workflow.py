@@ -129,7 +129,7 @@ class Workflow:
                                 pbar.update(1)
                         
                     logging.info(f"Awaiting for the results of tool execution")
-                    module_log["module_tool_logs"] = futures_res
+                    module_log["module_tool_logs"] = [res for res in futures_res if res is not None]
                 
                 else:
                     execute_threadpool_obj = ExecuteScanThreadPool()
@@ -145,7 +145,8 @@ class Workflow:
                         async def run_with_semaphore(task):
                             async with semaphore:
                                 res = await task
-                                results.append(res)
+                                if res is not None:
+                                    results.append(res)
                         for tool_tuple in commands_list:
                             pbar.set_description(module.upper())
                             task = loop.create_task(run_with_semaphore(execute_threadpool_obj.execute_and_store(tool_tuple)))

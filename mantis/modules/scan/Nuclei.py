@@ -44,14 +44,14 @@ class Nuclei(ToolScanner):
         for every_asset in self.assets:
             if "_id" in every_asset:
                 domain = every_asset["_id"]
-                for active_hosts in every_asset["active_hosts"][0]:
-                    outfile = CommonUtils.generate_unique_output_file_name(domain, self.outfile_extension)
-                    command = self.base_command.format(input_domain = active_hosts, output_file_path = outfile)
-                    self.commands_list.append((self, command, outfile, domain))
+                # One run per asset so the Open/Fixed reconciliation sees all of its findings
+                targets = ",".join(every_asset["active_hosts"][0])
             else:
-                outfile = CommonUtils.generate_unique_output_file_name(every_asset, self.outfile_extension)
-                command = self.base_command.format(input_domain = every_asset, output_file_path = outfile)
-                self.commands_list.append((self, command, outfile, every_asset))
+                domain = every_asset
+                targets = every_asset
+            outfile = CommonUtils.generate_unique_output_file_name(domain, self.outfile_extension)
+            command = CommonUtils.format_command(self.base_command, input_domain = targets, output_file_path = outfile)
+            self.commands_list.append((self, command, outfile, domain))
 
         return self.commands_list
     
@@ -66,32 +66,18 @@ class Nuclei(ToolScanner):
         if report_dict:
             for every_vuln in report_dict:
                 nuclei = {}
-                logging.info(f'Every vulnerability - {every_vuln}')
+                logging.debug(f'Every vulnerability - {every_vuln}')
                 nuclei["type"] = "vulnerability"
                 nuclei["org"] = self.org
                 nuclei['title'] = every_vuln['template-id']
 
-                if 'description' in every_vuln:
-                    nuclei['description'] = every_vuln['info']['description']
-                else:
-                    nuclei['description'] = "null"
-                
-                nuclei['info'] = every_vuln['info']
-
-                if 'severity' in every_vuln['info']:
-                    nuclei['severity'] = every_vuln['info']['severity']
-                else:
-                    nuclei['severity'] = "null"
-                
-                if 'cve_id' in every_vuln:
-                    nuclei['cve_id'] = every_vuln['info']['classification']['cve-id']
-                else:
-                    nuclei['cve_id'] = "null"
-
-                if 'cwe_id' in every_vuln:
-                    nuclei['cwe_id'] = every_vuln['info']['classification']['cwe-id']
-                else:
-                    nuclei['cwe_id'] = "null"
+                info = every_vuln.get('info', {})
+                classification = info.get('classification') or {}
+                nuclei['description'] = info.get('description') or "null"
+                nuclei['info'] = info
+                nuclei['severity'] = info.get('severity') or "null"
+                nuclei['cve_id'] = CommonUtils.join_ids(classification.get('cve-id'))
+                nuclei['cwe_id'] = CommonUtils.join_ids(classification.get('cwe-id'))
 
                 nuclei['host_with_protocol'] = every_vuln['host']
 

@@ -19,17 +19,20 @@ class Corsy(ToolScanner):
 
     async def get_commands(self, args: ArgsModel):
         self.org = args.org
-        self.base_command = 'python3 /usr/bin/Corsy/corsy.py -u {input_domain} -o {output_file_path} -d 1'
+        self.base_command = 'python3 /usr/bin/Corsy/corsy.py -i {input_file} -o {output_file_path} -d 1'
         self.outfile_extension = ".json"
         self.commands_list = []
         self.assets = await get_assets_with_non_empty_fields(self, args, "active_hosts")
         for every_asset in self.assets:
             if "_id" in every_asset:
                 domain = every_asset["_id"]
-                for active_hosts in every_asset["active_hosts"][0]:
-                    outfile = CommonUtils.generate_unique_output_file_name(domain, self.outfile_extension)
-                    command = self.base_command.format(input_domain = active_hosts, output_file_path = outfile)
-                    self.commands_list.append((self, command, outfile, domain))
+                # One run per asset so the Open/Fixed reconciliation sees all of its findings
+                input_file = CommonUtils.generate_unique_output_file_name(domain, ".txt")
+                with open(input_file, "w") as hosts_file:
+                    hosts_file.write("\n".join(every_asset["active_hosts"][0]))
+                outfile = CommonUtils.generate_unique_output_file_name(domain, self.outfile_extension)
+                command = CommonUtils.format_command(self.base_command, input_file = input_file, output_file_path = outfile)
+                self.commands_list.append((self, command, outfile, domain))
         return self.commands_list
 
     def parse_report(self, outfile):
