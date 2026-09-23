@@ -164,6 +164,8 @@ MONGO_ROOT_USER=mantis_root
 MONGO_ROOT_PASSWORD=$(openssl rand -hex 24)
 MANTIS_DB_USER=mantis
 MANTIS_DB_PASSWORD=$(openssl rand -hex 24)
+MANTIS_UI_USER=mantis_ui
+MANTIS_UI_PASSWORD=$(openssl rand -hex 24)
 ENV
     chmod 600 .env
 fi
@@ -172,6 +174,7 @@ docker compose --profile experimental pull --ignore-buildable
 docker compose --profile experimental build mantis
 docker compose --profile experimental up --remove-orphans -d mongodb 
 docker compose --profile experimental up --remove-orphans -d mantis 
+docker compose --profile experimental up --remove-orphans -d mantis-ui 
 docker compose --profile experimental up --remove-orphans -d dashboard
 
 echo -e "${BIYellow}\n\nSETUP SUMMARY${NC}\n"

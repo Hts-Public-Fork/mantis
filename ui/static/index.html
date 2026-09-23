@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mantis</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --panel-2: #1c2230; --border: #2a3140;
+    --text: #e6edf3; --muted: #8b96a5; --accent: #3fb950; --accent-dim: #2ea043;
+    --crit: #f85149; --high: #ff7b39; --med: #e3b341; --low: #58a6ff; --info: #8b96a5;
+    --open: #f85149; --fixed: #3fb950;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  :root[data-theme="light"] {
+    --bg: #f6f8fa; --panel: #ffffff; --panel-2: #f0f3f6; --border: #d0d7de;
+    --text: #1f2328; --muted: #656d76; --accent: #1a7f37; --accent-dim: #1a7f37;
+    --crit: #cf222e; --high: #bc4c00; --med: #9a6700; --low: #0969da; --info: #656d76;
+    --open: #cf222e; --fixed: #1a7f37;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font); font-size: 14px; }
+  a { color: var(--low); }
+  header {
+    display: flex; align-items: center; gap: 16px; padding: 14px 20px;
+    border-bottom: 1px solid var(--border); background: var(--panel); position: sticky; top: 0; z-index: 5;
+    flex-wrap: wrap;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 16px; letter-spacing: .3px; }
+  .brand .dot { color: var(--accent); font-size: 20px; }
+  header .spacer { flex: 1; }
+  select, input, button {
+    font: inherit; color: var(--text); background: var(--panel-2);
+    border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px;
+  }
+  button { cursor: pointer; }
+  button.ghost { background: transparent; }
+  .banner { display: none; padding: 10px 20px; background: rgba(248,81,73,.12); color: var(--crit); border-bottom: 1px solid var(--border); }
+  main { padding: 20px; max-width: 1400px; margin: 0 auto; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .tile { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+  .tile .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .5px; }
+  .tile .value { font-size: 28px; font-weight: 700; margin-top: 4px; font-family: var(--mono); }
+  .tile .value small { font-size: 13px; color: var(--muted); font-weight: 400; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+  @media (max-width: 800px) { .grid2 { grid-template-columns: 1fr; } }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+  .card h3 { margin: 0 0 12px; font-size: 13px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); }
+  .bar-row { display: flex; align-items: center; gap: 10px; margin: 7px 0; }
+  .bar-row .name { width: 90px; font-size: 12px; color: var(--muted); text-transform: capitalize; }
+  .bar-track { flex: 1; background: var(--panel-2); border-radius: 4px; height: 18px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 4px; min-width: 2px; transition: width .3s; }
+  .bar-row .num { width: 44px; text-align: right; font-family: var(--mono); font-size: 13px; }
+  .sev-critical { background: var(--crit); } .sev-high { background: var(--high); }
+  .sev-medium { background: var(--med); } .sev-low { background: var(--low); }
+  .sev-info, .sev-informational, .sev-unknown { background: var(--info); }
+  .tabs { display: flex; gap: 4px; margin-bottom: 12px; }
+  .tab { padding: 8px 16px; border: 1px solid var(--border); background: var(--panel); border-radius: 8px 8px 0 0; cursor: pointer; color: var(--muted); }
+  .tab.active { color: var(--text); border-bottom-color: var(--panel); background: var(--panel); font-weight: 600; }
+  .toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; align-items: center; }
+  .toolbar input[type=search] { min-width: 220px; flex: 1; }
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: top; }
+  th { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .5px; background: var(--panel-2); position: sticky; top: 0; }
+  td.mono { font-family: var(--mono); font-size: 12px; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--panel-2); }
+  .pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; font-family: var(--mono); }
+  .pill.critical { background: var(--crit); color: #fff; } .pill.high { background: var(--high); color: #fff; }
+  .pill.medium { background: var(--med); color: #000; } .pill.low { background: var(--low); color: #fff; }
+  .pill.info, .pill.informational, .pill.unknown { background: var(--info); color: #fff; }
+  .pill.open { background: transparent; border: 1px solid var(--open); color: var(--open); }
+  .pill.fixed { background: transparent; border: 1px solid var(--fixed); color: var(--fixed); }
+  .chips span { display: inline-block; background: var(--panel-2); border: 1px solid var(--border); border-radius: 4px; padding: 0 6px; margin: 1px 2px; font-size: 11px; font-family: var(--mono); }
+  .foot { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; color: var(--muted); font-size: 12px; }
+  .muted { color: var(--muted); }
+  .empty { text-align: center; padding: 40px; color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><span class="dot">🦗</span> Mantis <span class="muted" style="font-weight:400;font-size:12px;">Attack Surface</span></div>
+  <div class="spacer"></div>
+  <label class="muted" style="font-size:12px;">Org
+    <select id="orgSelect"><option value="">All</option></select>
+  </label>
+  <button class="ghost" id="refreshBtn" title="Refresh">↻</button>
+  <button class="ghost" id="themeBtn" title="Toggle theme">◐</button>
+</header>
+<div class="banner" id="banner"></div>
+<main>
+  <div class="tiles" id="tiles"></div>
+  <div class="grid2">
+    <div class="card"><h3>Open findings by severity</h3><div id="sevBars"></div></div>
+    <div class="card"><h3>Findings by status &amp; type</h3><div id="statusBars"></div></div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="findings">Findings</div>
+    <div class="tab" data-tab="assets">Assets</div>
+  </div>
+
+  <section id="tab-findings">
+    <div class="toolbar">
+      <input type="search" id="fSearch" placeholder="Search title or host…">
+      <select id="fSeverity"><option value="">Severity: all</option><option>critical</option><option>high</option><option>medium</option><option>low</option><option>info</option></select>
+      <select id="fStatus"><option value="">Status: all</option><option>Open</option><option>Fixed</option></select>
+      <select id="fType"><option value="">Type: all</option><option>vulnerability</option><option>misconfiguration</option><option>secret</option><option>phishing</option><option>informational</option></select>
+    </div>
+    <table><thead><tr><th>Severity</th><th>Title</th><th>Host</th><th>Type</th><th>Status</th><th>CVE</th><th>Tool</th></tr></thead><tbody id="fBody"></tbody></table>
+    <div class="foot"><span id="fCount" class="muted"></span><span><button class="ghost" id="fPrev">‹ Prev</button> <button class="ghost" id="fNext">Next ›</button></span></div>
+  </section>
+
+  <section id="tab-assets" hidden>
+    <div class="toolbar">
+      <input type="search" id="aSearch" placeholder="Search asset…">
+      <select id="aType"><option value="">Type: all</option><option>subdomain</option><option>TLD</option><option>ip</option><option>certificate</option></select>
+    </div>
+    <table><thead><tr><th>Asset</th><th>Type</th><th>Ports</th><th>Tech</th><th>WAF</th><th>CDN</th><th>Live</th></tr></thead><tbody id="aBody"></tbody></table>
+    <div class="foot"><span id="aCount" class="muted"></span><span><button class="ghost" id="aPrev">‹ Prev</button> <button class="ghost" id="aNext">Next ›</button></span></div>
+  </section>
+</main>
+<script src="app.js"></script>
+</body>
+</html>

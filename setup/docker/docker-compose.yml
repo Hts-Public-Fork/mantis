@@ -44,6 +44,8 @@ services:
       MONGO_INITDB_DATABASE: mantis
       MANTIS_DB_USER: ${MANTIS_DB_USER:?set in .env}
       MANTIS_DB_PASSWORD: ${MANTIS_DB_PASSWORD:?set in .env}
+      MANTIS_UI_USER: ${MANTIS_UI_USER:?set in .env}
+      MANTIS_UI_PASSWORD: ${MANTIS_UI_PASSWORD:?set in .env}
     volumes:
       - ./mongo-init:/docker-entrypoint-initdb.d:ro
       - mantis-db-data:/data/db
@@ -68,6 +70,28 @@ services:
     volumes:
       - ./stacks:/appsmith-stacks
     restart: unless-stopped
+  mantis-ui:
+    # Lightweight read-only dashboard built from ./ui in this repo. Connects to
+    # MongoDB as a read-only user and is published on loopback only.
+    build:
+      dockerfile: Dockerfile
+      context: ../../ui
+    image: mantis-ui:local
+    container_name: mantis-ui
+    <<: *hardening
+    restart: on-failure
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8080:8080"
+    networks:
+      network:
+        ipv4_address: 10.10.0.6
+    extra_hosts:
+      - "mantis.db:10.10.0.3"
+    environment:
+      - "MANTIS_UI_MONGO_URI=mongodb://${MANTIS_UI_USER:?set in .env}:${MANTIS_UI_PASSWORD:?set in .env}@mantis.db:27017/mantis?authSource=mantis"
   dashboard:
     # Experimental: this image hardcodes an unauthenticated MongoDB URI, so it
     # can't read data while --auth is enabled. Opt in with --profile experimental.
