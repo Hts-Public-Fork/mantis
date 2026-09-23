@@ -95,6 +95,27 @@ For uninstalling Mantis (remove all the resources created by installation), run 
 docker compose down
 ```
 
+To also delete the scan database volume, run `docker compose down -v`.
+
+#### Security defaults
+
+- MongoDB runs with authentication enabled. On first run the setup script generates `setup/docker/.env` with random passwords (see `.env.example`). Mantis reads its connection string from the `MANTIS_MONGO_URI` environment variable, which docker compose sets from that file. Keep `.env` private and never commit it.
+- AppSmith (`1337`/`1338`), MongoDB (`27000`) and the experimental dashboard (`8000`) are published on `127.0.0.1` only. For remote access, put a reverse proxy with authentication in front of them.
+- The Mantis image is built locally from this checkout. Base images are pinned by digest, and every downloaded tool is checked against a pinned sha256.
+
+#### Upgrading an existing Docker install
+
+Earlier versions ran MongoDB without authentication and without a named volume. The new `mantis-db-data` volume starts empty, so back up existing scan data first:
+
+```
+docker exec mongodb mongodump --db mantis --archive > mantis-backup.archive
+docker compose down
+./docker-setup-<os>.sh
+docker exec -i mongodb sh -c 'mongorestore --username "$MANTIS_DB_USER" --password "$MANTIS_DB_PASSWORD" --authenticationDatabase mantis --archive' < mantis-backup.archive
+```
+
+Update the AppSmith datasource with the new credentials (see below).
+
 ## Dashboard Setup 📊
 
 Once the docker setup is complete, please run a scan and follow the below instructions to setup the dashboard.
@@ -116,6 +137,8 @@ mantis onboard -o org_name -t example.in
     - host - mantis.db
     - port - 27017
     - default db - mantis
+    - authentication database - mantis
+    - username / password - `MANTIS_DB_USER` / `MANTIS_DB_PASSWORD` from `setup/docker/.env`
 - By default this places you in "edit mode" for the application layout.  To view the application and your results from the previous scan, in the upper right of the screen click the "Deploy" button.  It has a small rocket icon next to it.  This should launch a new tab/window where you can navigate through the results of your scan(s).
 
 ### Assets 

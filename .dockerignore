@@ -1,0 +1,9 @@
+.git
+.github
+**/__pycache__
+logs
+tests
+images
+dashboard_templates
+setup
+**/.env

@@ -1,14 +1,24 @@
+# Credentials come from .env next to this file (see .env.example); the setup
+# scripts generate it with random passwords on first run.
+x-hardening: &hardening
+  security_opt:
+    - no-new-privileges:true
+
 services:
   mantis:
-    # When testing local changes, uncomment the following commented lines and comment out "image"
-    # This will build the mantis container locally instead of pulling from GHRC
-    #build:
-    #  dockerfile: Dockerfile
-    #  context: ../../
-    image: ghcr.io/phonepe/mantis:latest
+    # Built from this checkout so the image matches the reviewed source.
+    # Tool downloads inside the Dockerfile are pinned by sha256.
+    build:
+      dockerfile: Dockerfile
+      context: ../../
+    image: mantis:local
     container_name: mantis
+    <<: *hardening
     restart: on-failure
     command: sleep infinity
+    depends_on:
+      mongodb:
+        condition: service_healthy
     networks:
       network:
         ipv4_address: 10.10.0.2
@@ -16,26 +26,40 @@ services:
       - "mantis.db:10.10.0.3"
     environment:
       - "PS1='Mantis > '"
+      - "MANTIS_MONGO_URI=mongodb://${MANTIS_DB_USER:?set in .env}:${MANTIS_DB_PASSWORD:?set in .env}@mantis.db:27017/mantis?authSource=mantis"
   mongodb:
     container_name: mongodb
-    image: mongo:latest
+    image: mongo:8.0.32@sha256:4968f22d0c6c10ef29952f3e807f62872ba22b3312f25803564fbfc08255efc2
+    <<: *hardening
     restart: always
     ports:
       - "127.0.0.1:27000:27017"
     networks:
       network:
         ipv4_address: 10.10.0.3
-    command: mongod --bind_ip 10.10.0.3
+    command: mongod --auth --bind_ip 10.10.0.3,127.0.0.1
     environment:
-      MONGO_INITDB_ROOT_DATABASE: mantis
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:?set in .env}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?set in .env}
+      MONGO_INITDB_DATABASE: mantis
+      MANTIS_DB_USER: ${MANTIS_DB_USER:?set in .env}
+      MANTIS_DB_PASSWORD: ${MANTIS_DB_PASSWORD:?set in .env}
     volumes:
-      - ./configs/mongo-config.js:/docker-entrypoint-initdb.d/mongo-init.sh:ro
+      - ./mongo-init:/docker-entrypoint-initdb.d:ro
+      - mantis-db-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
   appsmith:
-    image: index.docker.io/appsmith/appsmith-ce
+    image: appsmith/appsmith-ce:v2.4.1@sha256:a27b379893ec569b5a2dcced813016ed29d84209e5f8a35be257067b657f32fe
     container_name: appsmith
+    <<: *hardening
+    # Published on loopback only; put a reverse proxy with auth in front for remote access
     ports:
-      - "1337:80"
-      - "1338:443"
+      - "127.0.0.1:1337:80"
+      - "127.0.0.1:1338:443"
     networks:
       network:
         ipv4_address: 10.10.0.4
@@ -45,16 +69,24 @@ services:
       - ./stacks:/appsmith-stacks
     restart: unless-stopped
   dashboard:
-    image: ghcr.io/phonepe/mantis-dashboard:latest
+    # Experimental: this image hardcodes an unauthenticated MongoDB URI, so it
+    # can't read data while --auth is enabled. Opt in with --profile experimental.
+    profiles: ["experimental"]
+    image: ghcr.io/phonepe/mantis-dashboard:latest@sha256:355a6aa45600a18f6105afb1c4e7bb36af1826bd38b0fe8e3958d5668e620e23
     container_name: mantis-dashboard
+    <<: *hardening
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     restart: on-failure
     networks:
       network:
         ipv4_address: 10.10.0.5
     extra_hosts:
       - "mantis.db:10.10.0.3"
+
+volumes:
+  mantis-db-data:
+
 networks:
   network:
     name: mantis-network
