@@ -26,10 +26,10 @@ async def read_findings(pipeline):
 async def findings_bulk_mixed_query(bulk_write_query):
 
     try:
-        result = findings_collection.bulk_write(bulk_write_query)
+        result = await findings_collection.bulk_write(bulk_write_query, ordered=False)
 
     except Exception as e:
-        logging.debug(f'Findings Bulk write error while update: {e}')
+        logging.error(f'Findings Bulk write error while update: {e}')
 
 async def check_field_exists(field_name: str, value: str) -> bool:
     try:

@@ -2,12 +2,17 @@ from mantis.utils.common_utils import CommonUtils
 from subprocess import Popen, PIPE, DEVNULL
 from mantis.models.args_model import ArgsModel
 import logging
+import os
+import signal
 import sys
 import time
 import asyncio
 
 class ToolScanner:
-    
+
+    # Upper bound (seconds) for a single tool invocation; subclasses can override
+    timeout = 7200
+
     def __init__(self) -> None:
         self.org = None
         self.base_command = None
@@ -31,7 +36,7 @@ class ToolScanner:
         for every_asset in assets:  
             domain = every_asset
             outfile = CommonUtils.generate_unique_output_file_name(domain, self.outfile_extension)
-            command = self.base_command.format(input_domain = domain, output_file_path = outfile)
+            command = CommonUtils.format_command(self.base_command, input_domain = domain, output_file_path = outfile)
             command_list.append((self, command, outfile, every_asset))
         self.commands_list = command_list
         return command_list
@@ -62,9 +67,24 @@ class ToolScanner:
             start = time.perf_counter()
 
             subprocess_obj = await asyncio.create_subprocess_shell(
-                command, stderr=DEVNULL, stdout=DEVNULL, shell=True) 
-            code = await subprocess_obj.wait()
-            output,errors = await subprocess_obj.communicate()
+                command, stderr=DEVNULL, stdout=DEVNULL, start_new_session=True)
+            try:
+                output, errors = await asyncio.wait_for(subprocess_obj.communicate(), timeout=self.timeout)
+            except asyncio.TimeoutError:
+                # Kill the whole process group, not just the wrapping shell
+                try:
+                    os.killpg(subprocess_obj.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                await subprocess_obj.wait()
+                results["exception"] = f"Timed out after {self.timeout}s"
+                results["command"] = command
+                results["success"] = 0
+                results["failure"] = 1
+                logging.warning(f"{type(self).__name__} timed out after {self.timeout}s for {asset}")
+                # Partial output must not be persisted, it would mark findings as Fixed
+                return results
+            code = subprocess_obj.returncode
 
             finish = time.perf_counter()
 

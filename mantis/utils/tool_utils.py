@@ -131,7 +131,7 @@ def get_pipeline(self, args):
     pipeline = []
     if args.app:
         pipeline.append(
-            {"$match": {"org": args.app}}
+            {"$match": {"app": args.app}}
         )
 
     if args.ignore_stale:
@@ -152,12 +152,17 @@ def get_pipeline(self, args):
     return pipeline
 
 
-async def get_findings_by_asset(asset, finding_type):
+async def get_findings_by_asset(asset, finding_type, tool_source=None):
     pipeline = []
 
     pipeline.extend([
         {"$match": {"host": asset}},
         {"$match": {"type": finding_type}},
+    ])
+    if tool_source:
+        pipeline.append({"$match": {"tool_source": tool_source}})
+
+    pipeline.extend([
 
         {"$group": {
             "_id": "$_id",

@@ -24,7 +24,7 @@ class HTTPX_Active(ToolScanner):
             domain = every_asset['_id']
             ports = ','.join(str(num) for num in every_asset['ports'][0])
             outfile = CommonUtils.generate_unique_output_file_name(domain, self.outfile_extension)
-            command = self.base_command.format(subdomain = domain, output_file_path = outfile, ports_comma_seperated=ports)
+            command = CommonUtils.format_command(self.base_command, subdomain = domain, output_file_path = outfile, ports_comma_seperated=ports)
             self.commands_list.append((self, command, outfile, domain))
         return self.commands_list
     

@@ -8,6 +8,7 @@ from mantis.models.tool_logs_model import AssetLogs
 class ExecuteRayScan:
 
     async def execute_and_store(self,tool_tuple):
+        asset_log = None
         tool_start_time = time.perf_counter()
         scanner = tool_tuple[0] 
         logging.info(f"Executing command for {type(scanner).__name__}")

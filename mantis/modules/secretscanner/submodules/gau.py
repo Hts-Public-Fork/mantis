@@ -2,6 +2,7 @@ import os
 import sys
 import time
 import logging
+from mantis.utils.common_utils import CommonUtils
 from concurrent.futures import ThreadPoolExecutor
 from mantis.utils.tool_utils import get_assets_grouped_by_type
 from mantis.constants import ASSET_TYPE_TLD
@@ -18,7 +19,7 @@ class Gau:
 
     @staticmethod
     def run_command(path, domain, command):
-        command = command.format(path=path, DOMAIN=domain)
+        command = CommonUtils.format_command(command, path=path, DOMAIN=domain)
         logging.debug(f"Running command '{command}'")
         subprocess_obj = Popen(
                 command, stderr=sys.stderr, stdout=sys.stdout, shell=True) 
