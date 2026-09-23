@@ -155,7 +155,20 @@ echo -e -n "[?] ${BICyan} Do you have sudo access on the machine? (y/n)? ${NC}"
 
 # Install packages
 
-docker compose pull
+# Generate MongoDB credentials on first run (kept across re-runs so the DB stays reachable)
+if [ ! -f .env ]; then
+    echo -e "[+] ${Green}Generating MongoDB credentials in $(pwd)/.env${NC}"
+    cat > .env <<ENV
+MONGO_ROOT_USER=mantis_root
+MONGO_ROOT_PASSWORD=$(openssl rand -hex 24)
+MANTIS_DB_USER=mantis
+MANTIS_DB_PASSWORD=$(openssl rand -hex 24)
+ENV
+    chmod 600 .env
+fi
+
+docker compose pull --ignore-buildable
+docker compose build mantis
 docker compose up --remove-orphans -d  mongodb 
 docker compose up --remove-orphans -d  mantis 
 docker compose up --remove-orphans -d  appsmith 
@@ -188,6 +201,7 @@ ${BIGreen}
         - Configure your dashboard using instructions at https://github.com/PhonePe/mantis/#dashboard-setup-
 
     3. You can access MongoDB container using: ${BICyan}docker exec -it mongodb bash${BIGreen}
+        - MongoDB requires auth. Credentials are in ${BICyan}$(pwd)/.env${BIGreen} (user MANTIS_DB_USER, authSource=mantis)
 
     4. Mantis documentation is available at https://phonepe.github.io/mantis
     5. Get help and give feedback at https://discord.gg/uJV8Y3uSGu

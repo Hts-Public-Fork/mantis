@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# The dashboard service sits behind the 'experimental' compose profile
+
 # Regular Colors
 Black='\033[0;30m'        # Black
 Red='\033[0;31m'          # Red
@@ -52,7 +54,7 @@ Please ensure your system meets them before proceeding.
    - https://docs.docker.com/engine/install/ubuntu/
    - Check version with 'docker --version'
 2. Install Docker Compose >= v2.0.0
-   - Check version with 'docker compose version'
+   - Check version with 'docker compose --profile experimental version'
 4. sudo access on the machine
 5. Ports 8000 available on host machine for Mantis dashboard
     - If this port can't be freed then modify the port mapping in docker-compose.yml 
@@ -73,10 +75,10 @@ fi
 
 sudo apt update && sudo apt install jq -y
 
-if docker compose ps | grep -q "Up"; then
+if docker compose --profile experimental ps | grep -q "Up"; then
     echo -e "[?] ${BIYellow}Looks like this script was run previously to setup Mantis.${NC}\n"
 
-sudo docker compose ps --format json | jq -r '(. | [.Service, .State]) | @tsv' | column -ts $'\t'
+sudo docker compose --profile experimental ps --format json | jq -r '(. | [.Service, .State]) | @tsv' | column -ts $'\t'
 
 echo -e -n "
 [!] ${Yellow}Previously created resources need to be cleaned up before proceeding with installation \n
@@ -101,24 +103,24 @@ read -p "What would you like to do? (1/2/3/4): " choice
 case $choice in
     1)
         echo -e "[-] ${Red}Removing all the existing containers from Mantis setup${NC}"
-        sudo docker compose down dashboard
-        sudo docker compose down mantis
-        sudo docker compose down mongodb
+        sudo docker compose --profile experimental down dashboard
+        sudo docker compose --profile experimental down mantis
+        sudo docker compose --profile experimental down mongodb
         ;;
     2)
         echo -e "[-] ${Red}Removing Mantis, dashboard and retaining MongoDB${NC}"
-        sudo docker compose down dashboard
-        sudo docker compose down mantis
+        sudo docker compose --profile experimental down dashboard
+        sudo docker compose --profile experimental down mantis
         ;;
     3)
         echo -e "[-] ${Red}Removing Mantis, MongoDB and retaining dashboard${NC}"
-        sudo docker compose down mongodb
-        sudo docker compose down mantis
+        sudo docker compose --profile experimental down mongodb
+        sudo docker compose --profile experimental down mantis
         ;;
 
     4)
         echo -e "[-] ${Red}Removing Mantis and retaining MongoDB,dashboard${NC}"
-        sudo docker compose down mantis
+        sudo docker compose --profile experimental down mantis
         ;;
     *)
         echo -e "\nInvalid choice. Please select a valid option (1/2/3/4)."
@@ -148,22 +150,35 @@ echo -e -n "[?] ${BICyan}Do you have sudo access on the machine? (y/n)? ${NC}"
 
 # Install packages
 
-sudo docker compose pull
-sudo docker compose up --remove-orphans -d mongodb 
-sudo docker compose up --remove-orphans -d mantis 
-sudo docker compose up --remove-orphans -d dashboard 
+# Generate MongoDB credentials on first run (kept across re-runs so the DB stays reachable)
+if [ ! -f .env ]; then
+    echo -e "[+] ${Green}Generating MongoDB credentials in $(pwd)/.env${NC}"
+    cat > .env <<ENV
+MONGO_ROOT_USER=mantis_root
+MONGO_ROOT_PASSWORD=$(openssl rand -hex 24)
+MANTIS_DB_USER=mantis
+MANTIS_DB_PASSWORD=$(openssl rand -hex 24)
+ENV
+    chmod 600 .env
+fi
+
+sudo docker compose --profile experimental pull --ignore-buildable
+sudo docker compose --profile experimental build mantis
+sudo docker compose --profile experimental up --remove-orphans -d mongodb 
+sudo docker compose --profile experimental up --remove-orphans -d mantis 
+sudo docker compose --profile experimental up --remove-orphans -d dashboard 
 
 echo -e "${BIYellow}\n\nSETUP SUMMARY${NC}\n"
 
-sudo docker compose ps --format json | jq -r '(. | [.Service, .State]) | @tsv' | column -ts $'\t'
+sudo docker compose --profile experimental ps --format json | jq -r '(. | [.Service, .State]) | @tsv' | column -ts $'\t'
 
 sudo  sed -i "/mantis/d" /etc/hosts
 sudo -- sh -c -e "echo '10.10.0.3  mantis.db' >> /etc/hosts";
 sudo -- sh -c -e "echo '127.0.0.1  mantis.dashboard' >> /etc/hosts";
 
-dashboard_exists=$(docker compose ps -q mantis-dashboard)
-mongo_exists=$(docker compose ps -q mongodb)
-mantis_exists=$(docker compose ps -q mantis)
+dashboard_exists=$(docker compose --profile experimental ps -q dashboard)
+mongo_exists=$(docker compose --profile experimental ps -q mongodb)
+mantis_exists=$(docker compose --profile experimental ps -q mantis)
 
 if [ -n "$dashboard_exists" ] && [ -n "$mongo_exists" ] && [ -n "$mantis_exists" ]; then
 echo -e -n "
@@ -175,9 +190,11 @@ ${BIGreen}
         - You can always access Mantis container again using: ${BICyan}docker exec -it mantis bash${BIGreen}
         - For ease of use, run ${BICyan}mantis-activate${BIGreen} command anywhere on the system to exec into Mantis docker
     2. Mantis dashboard is accessible on the host's localhost port 8000
+        - ${BIYellow}Note: this dashboard image doesn't support MongoDB authentication yet, so it can't read scan data${BIGreen}
         - For ease of use, you can access dashboard from your system at ${BICyan}http://mantis.dashboard:8000${BIGreen}
         - You can access dashboard container using - ${BICyan}docker exec -it mantis-dashboard bash${BIGreen}
     3. You can access MongoDB container using: ${BICyan}docker exec -it mongodb bash${BIGreen}
+        - MongoDB requires auth. Credentials are in ${BICyan}$(pwd)/.env${BIGreen} (user MANTIS_DB_USER, authSource=mantis)
     4. Mantis documentation is available at https://phonepe.github.io/mantis
     5. Get help and give feedback at https://discord.gg/uJV8Y3uSGu
 
